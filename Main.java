@@ -1,31 +1,35 @@
 import java.util.*;
 
 class Main {
-  public enum Priority { // 二項演算子と数字の優先度とID化
-    PLUSMINUS(100), MULTDIV(200), NUMBER(0), OPENPARENSIS(-1), CLOSEPARENSIS(-2);
-
-    private final int id;
-
-    private Priority(final int id) {
-      this.id = id;
-    }
-
-    public int getInt() {
-      return this.id;
-    }
-  }
-
   public enum Operands { // 演算子
-    PLUS("+"), MINUS("-"), MULT("*"), DIV("/"), OPENPARENSIS("("), CLOSEPARENSIS(")");
+    // (オペランドの形、結合性、優先度)
+    // 結合性 0 多分かんたんにするなら結合性のオペランドも左結合性として扱うのが楽だと思われる
+    // 左結合性 -1
+    // 右結合性 1
+    // その他 2
+    PLUS("+", 1, 100), MINUS("-", -1, 100), MULT("*", 1, 200), DIV("/", -1, 200), OPENPARENSIS("(", 2, -1),
+    CLOSEPARENSIS(")", 2, -2), POW("^", 1, 300), NUMBER(".", 2, 100000); // 数字もオペランドということにする
 
     private final String str;
+    private final int connectivity;
+    private final int priority;
 
-    private Operands(final String s) {
+    private Operands(final String s, final int t, final int p) {
       this.str = s;
+      this.connectivity = t;
+      this.priority = p;
     }
 
     public String getString() {
       return this.str;
+    }
+
+    public int getPriority() {
+      return this.priority;
+    }
+
+    public int getConnectivity() {
+      return this.connectivity;
     }
   }
 
@@ -113,25 +117,27 @@ class Main {
     ArrayDeque<String> detentstack = new ArrayDeque<String>(); // 留置するスタック
 
     for (int i = 0; i < s.length; i++) {
-      if (getpriority(s[i]) == Priority.NUMBER.getInt()) { // num
-        outputs.addLast(s[i]);
-      } else if (getpriority(s[i]) == Priority.MULTDIV.getInt() || getpriority(s[i]) == Priority.PLUSMINUS.getInt()) {
+      if (getpriority(s[i]) == Operands.NUMBER.getPriority()) { // num
+        outputs.addLast(s[i]); // 問答無用でアウトプットスタックに入れていたが吟味…しなくても良さそう
+        // detentstack.addLast(s[i]);
+      } else if (getpriority(s[i]) == Operands.MULT.getPriority() || getpriority(s[i]) == Operands.DIV.getPriority()
+          || getpriority(s[i]) == Operands.PLUS.getPriority() || getpriority(s[i]) == Operands.MINUS.getPriority()) { // 左結合性の算術記号
         while (detentstack.size() > 0 && getpriority(detentstack.getLast()) >= getpriority(s[i])) {
           outputs.addLast(detentstack.removeLast());
         }
         detentstack.addLast(s[i]);
-      } else if (getpriority(s[i]) == Priority.OPENPARENSIS.getInt()) {
+      } else if (getpriority(s[i]) == Operands.OPENPARENSIS.getPriority()) { // 開きカッコ
         detentstack.addLast(s[i]);
-      } else if (getpriority(s[i]) == Priority.CLOSEPARENSIS.getInt()) {
-        while (detentstack.size() > 0 && getpriority(detentstack.getLast()) != Priority.OPENPARENSIS.getInt()) {
+      } else if (getpriority(s[i]) == Operands.CLOSEPARENSIS.getPriority()) { // 閉じカッコ
+        while (detentstack.size() > 0 && (getpriority(detentstack.getLast()) != Operands.OPENPARENSIS.getPriority())) { // 閉じ括弧がきて開き括弧がくるまでオペランドを出力のスタックに積む
           outputs.addLast(detentstack.removeLast());
         }
-        if (detentstack.size() > 0 && getpriority(detentstack.getLast()) == Priority.OPENPARENSIS.getInt()) {
+        if (detentstack.size() > 0 && getpriority(detentstack.getLast()) == Operands.OPENPARENSIS.getPriority()) { // 閉じ括弧に対応する開き括弧が来たら開き括弧をスタックから取り除く
           detentstack.removeLast();
         }
       }
     }
-    while (detentstack.size() > 0) {
+    while (detentstack.size() > 0) { // 残ったオペランドスタックの中身をすべて出す
       outputs.add(detentstack.removeLast());
     }
     Object[] ret = new Object[outputs.size()];
@@ -145,15 +151,15 @@ class Main {
 
   public static int getpriority(String op) {
     if (op.equals(Operands.PLUS.getString()) || op.equals(Operands.MINUS.getString())) { // low priority operand
-      return Priority.PLUSMINUS.getInt();
+      return Operands.PLUS.getPriority(); // + -の優先度
     } else if (op.equals(Operands.MULT.getString()) || op.equals(Operands.DIV.getString())) { // high priority operand
-      return Priority.MULTDIV.getInt();
+      return Operands.MULT.getPriority(); // * /の優先度
     } else if (op.equals(Operands.OPENPARENSIS.getString())) { // 括弧はオペランド扱いとした時に最も優先度が低いと扱うとうまくいくはず
-      return Priority.OPENPARENSIS.getInt();
+      return Operands.OPENPARENSIS.getPriority();
     } else if (op.equals(Operands.CLOSEPARENSIS.getString())) {
-      return Priority.CLOSEPARENSIS.getInt();
+      return Operands.CLOSEPARENSIS.getPriority();
     } else {
-      return Priority.NUMBER.getInt();
+      return Operands.NUMBER.getPriority();
     }
   }
 
@@ -346,7 +352,8 @@ class Main {
     } else {
       for (int i = 0; i < s.length(); i++) {
         if (!isOperand) {
-          if (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == '*' || s.charAt(i) == '/') {
+          if (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == '*' || s.charAt(i) == '/'
+              || s.charAt(i) == '^') {
             isOperand = true;
           } else { // number or parensis
             //
@@ -354,7 +361,7 @@ class Main {
         } else if (isOperand) {
           if (s.charAt(i) == '-') {
             //
-          } else if (s.charAt(i) == '+' || s.charAt(i) == '*' || s.charAt(i) == '/') {
+          } else if (s.charAt(i) == '+' || s.charAt(i) == '*' || s.charAt(i) == '/' || s.charAt(i) == '^') {
             return false; // 6- *8は正しくない形式
           } else {
             isOperand = false;
