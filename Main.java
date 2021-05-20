@@ -1,6 +1,9 @@
 import java.util.*;
 
 class Main {
+  final int LEFT = -1;
+  final int RIGHT = 1;
+
   public enum Operands { // 演算子
     // (オペランドの形、結合性、優先度)
     // 結合性 0 多分かんたんにするなら結合性のオペランドも左結合性として扱うのが楽だと思われる
@@ -8,7 +11,7 @@ class Main {
     // 右結合性 1
     // その他 2
     PLUS("+", 1, 100), MINUS("-", -1, 100), MULT("*", 1, 200), DIV("/", -1, 200), OPENPARENSIS("(", 2, -1),
-    CLOSEPARENSIS(")", 2, -2), POW("^", 1, 300), NUMBER(".", 2, 100000); // 数字もオペランドということにする
+    CLOSEPARENSIS(")", 2, -2), POW("^", 1, 300), NUMBER("", 2, 100000); // 数字もオペランドということにする
 
     private final String str;
     private final int connectivity;
@@ -34,30 +37,38 @@ class Main {
   }
 
   public static void main(String[] args) throws DenominatorIsZeroException {
-    // Scanner sc = new Scanner(System.in);
-    /*
-     * while (true) { String shiki = sc.nextLine(); // 空白は除くようにする if
-     * (shiki.equals("end")) { break; } else { try { Rational res =
-     * evalformula(shiki); } catch (DenominatorIsZeroException e) {
-     * System.out.println(e.getMessage()); } } }
-     */
+    Scanner sc = new Scanner(System.in);
 
-    for (int i = 0; i < 42; i++) {
-      String shiki = sqrt2(i);
-      try {
-        Rational res = evalformula(shiki);
-      } catch (DenominatorIsZeroException e) {
-        System.out.println(e.getMessage());
+    while (true) {
+      String shiki = sc.nextLine(); // 空白は除くようにする
+      if (shiki.equals("end")) {
+        break;
+      } else {
+        try {
+          Rational res = evalformula(shiki);
+        } catch (DenominatorIsZeroException e) {
+          System.out.println(e.getMessage());
+        } catch (Main.NotaRationalException e) {
+          e.printStackTrace();
+        }
       }
     }
-    // sc.close();
+
+    /*
+     * for (int i = 0; i < 42; i++) { String shiki = sqrt2(i); try { Rational res =
+     * evalformula(shiki); } catch (DenominatorIsZeroException e) {
+     * System.out.println(e.getMessage()); } }
+     * 
+     */
+    sc.close();
   }
 
-  public static Rational evalformula(String s) throws DenominatorIsZeroException {
+  public static Rational evalformula(String s) throws DenominatorIsZeroException, NotaRationalException {
     s = trimformula(s);
-    // System.out.println(s);
+    System.out.println(s);
     String[] splitFormula = s.split(" ");
     String[] res = convFormula(splitFormula);
+    System.out.println(Arrays.toString(res));
     try {
       Rational r = calcFormula(res);
       System.out.println("" + r.bunshi + "/" + r.bumbo);
@@ -68,12 +79,14 @@ class Main {
     }
   }
 
-  public static Rational calcFormula(String[] s) throws DenominatorIsZeroException { // 式を計算して答えを出す
+  public static Rational calcFormula(String[] s) throws DenominatorIsZeroException, Main.NotaRationalException { // 式を計算して答えを出す
     if (s.length == 0) {
       return new Rational(0L); // なにもない式も四季として成立(式のフォーマットからは離れていないという点で)
     } else {
       ArrayList<Rational> rs = new ArrayList<Rational>();
       for (int i = 0; i < s.length; i++) { // 操車場アルゴリズムによって中置記法を後置記法に変換し、スタックで計算している
+        dump(rs);
+        System.out.println(s[i] + " == notOpernd: " + notOperand(s[i]));
         if (notOperand(s[i])) {
           rs.add(new Rational(s[i]));
         } else {
@@ -93,6 +106,10 @@ class Main {
             Rational r2 = rs.remove(rs.size() - 1);
             Rational r1 = rs.remove(rs.size() - 1);
             rs.add(Rational.div(r1, r2));
+          } else if (s[i].equals(Operands.POW.getString())) {
+            Rational r2 = rs.remove(rs.size() - 1);
+            Rational r1 = rs.remove(rs.size() - 1);
+            rs.add(Rational.pow(r1, r2));
           }
         }
       }
@@ -119,13 +136,18 @@ class Main {
     for (int i = 0; i < s.length; i++) {
       if (getpriority(s[i]) == Operands.NUMBER.getPriority()) { // num
         outputs.addLast(s[i]); // 問答無用でアウトプットスタックに入れていたが吟味…しなくても良さそう
-        // detentstack.addLast(s[i]);
       } else if (getpriority(s[i]) == Operands.MULT.getPriority() || getpriority(s[i]) == Operands.DIV.getPriority()
           || getpriority(s[i]) == Operands.PLUS.getPriority() || getpriority(s[i]) == Operands.MINUS.getPriority()) { // 左結合性の算術記号
         while (detentstack.size() > 0 && getpriority(detentstack.getLast()) >= getpriority(s[i])) {
           outputs.addLast(detentstack.removeLast());
         }
         detentstack.addLast(s[i]);
+      } else if (getpriority(s[i]) == Operands.POW.getPriority()) { // 右結合性
+        while (detentstack.size() > 0 && (getpriority(detentstack.getLast()) > getpriority(s[i]))) {
+          outputs.addLast(detentstack.removeLast());
+        }
+        detentstack.addLast(s[i]);
+
       } else if (getpriority(s[i]) == Operands.OPENPARENSIS.getPriority()) { // 開きカッコ
         detentstack.addLast(s[i]);
       } else if (getpriority(s[i]) == Operands.CLOSEPARENSIS.getPriority()) { // 閉じカッコ
@@ -158,6 +180,8 @@ class Main {
       return Operands.OPENPARENSIS.getPriority();
     } else if (op.equals(Operands.CLOSEPARENSIS.getString())) {
       return Operands.CLOSEPARENSIS.getPriority();
+    } else if (op.equals(Operands.POW.getString())) {
+      return Operands.POW.getPriority();
     } else {
       return Operands.NUMBER.getPriority();
     }
@@ -273,6 +297,43 @@ class Main {
       }
     }
 
+    public static Rational pow(Rational r1, Rational r2) throws NotaRationalException {
+      Rational res = new Rational(1L);
+      try {
+        if (redu(r2).bumbo != 1L) {
+          throw new NotaRationalException("Not a Rational");
+        } else {
+          if (r2.bunshi >= 0) {
+            if (r2.bunshi == 0L) {
+              return new Rational(1L);
+            } else {
+              while (r2.bunshi > 0) {
+                if (r2.bunshi % 2L == 1L) {
+                  res = mult(res, r1);
+                }
+                r1 = mult(r1, r1);
+                r2.bunshi /= 2L;
+              }
+              return res;
+            }
+          } else {
+            r2.bunshi = Math.abs(r2.bunshi);
+            while (r2.bunshi > 0) {
+              if (r2.bunshi % 2L == 1L) {
+                res = mult(res, r1);
+              }
+              r1 = mult(r1, r1);
+              r2.bunshi /= 2L;
+            }
+            return (div(new Rational(1L), res));
+          }
+        }
+      } catch (Main.DenominatorIsZeroException e) {
+        e.printStackTrace();
+      }
+      return res;
+    }
+
     public static boolean isNegative(Rational r) throws DenominatorIsZeroException {
       if (r.bunshi == 0) {
         throw new DenominatorIsZeroException("Denominator is Zero! at isNegative func.");
@@ -295,10 +356,22 @@ class Main {
     return false;
   }
 
+  public static String output(Rational r) {
+    return r.bunshi + "/" + r.bumbo;
+  }
+
   public static class DenominatorIsZeroException extends Exception {
     private static final long serialVersionUID = 1L;
 
     DenominatorIsZeroException(String s) {
+      super(s);
+    }
+  }
+
+  public static class NotaRationalException extends Exception {
+    private static final long serialVersionUID = 1L;
+
+    NotaRationalException(String s) {
       super(s);
     }
   }
@@ -315,7 +388,8 @@ class Main {
       boolean isOperand = true;
       StringBuilder sb = new StringBuilder();
       for (int i = 0; i < s.length(); i++) {
-        if (!isOperand && (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == '*' || s.charAt(i) == '/')) {
+        if (!isOperand && (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == '*' || s.charAt(i) == '/'
+            || s.charAt(i) == '^')) {
           isOperand = true; // 前が記号でない時
           sb.append(" " + s.charAt(i) + " ");
         } else if (isOperand && s.charAt(i) == '-') {
@@ -373,6 +447,14 @@ class Main {
       }
     }
     return true;
+  }
+
+  public static void dump(ArrayList<Rational> r) {
+    System.out.print("[");
+    for (Rational ret : r) {
+      System.out.print(output(ret) + ", ");
+    }
+    System.out.println("]");
   }
 
   public static String sqrt2(int itr) {
